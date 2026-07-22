@@ -1,0 +1,6 @@
+{
+  "name": "WiFiWise",
+  "description": "Advanced WiFi Optimization Engine with Roaming Prediction",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

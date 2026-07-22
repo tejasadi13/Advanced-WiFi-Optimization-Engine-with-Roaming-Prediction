@@ -1,0 +1,52 @@
+package com.example.di
+
+import android.content.Context
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.CreationExtras
+import com.example.data.local.WifiDatabase
+import com.example.data.repository.WifiRepositoryImpl
+import com.example.domain.repository.WifiRepository
+import com.example.ui.viewmodel.WifiWiseViewModel
+
+/**
+ * ServiceLocator provides basic dependency injection for the WiFiWise application.
+ * This guarantees stable compile times and eliminates annotation processing version conflicts
+ * while keeping the project structure clean, modular, and loosely coupled.
+ */
+object ServiceLocator {
+    private var database: WifiDatabase? = null
+    private var repository: WifiRepository? = null
+
+    fun getDatabase(context: Context): WifiDatabase {
+        return database ?: synchronized(this) {
+            val db = WifiDatabase.getDatabase(context.applicationContext)
+            database = db
+            db
+        }
+    }
+
+    fun getRepository(context: Context): WifiRepository {
+        return repository ?: synchronized(this) {
+            val repo = WifiRepositoryImpl(getDatabase(context).wifiDao)
+            repository = repo
+            repo
+        }
+    }
+
+    /**
+     * Provide ViewModel Factory to compose proper MVVM injections safely.
+     */
+    fun provideViewModelFactory(context: Context): ViewModelProvider.Factory {
+        return object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
+                if (modelClass.isAssignableFrom(WifiWiseViewModel::class.java)) {
+                    val repo = getRepository(context)
+                    return WifiWiseViewModel(repo) as T
+                }
+                throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+            }
+        }
+    }
+}
