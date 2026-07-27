@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.example.data.local.WifiDatabase
 import com.example.data.repository.WifiRepositoryImpl
+import com.example.data.util.WifiManagerHelper
 import com.example.domain.repository.WifiRepository
 import com.example.ui.viewmodel.WifiWiseViewModel
 
@@ -16,6 +17,7 @@ import com.example.ui.viewmodel.WifiWiseViewModel
  */
 object ServiceLocator {
     private var database: WifiDatabase? = null
+    private var wifiManagerHelper: WifiManagerHelper? = null
     private var repository: WifiRepository? = null
 
     fun getDatabase(context: Context): WifiDatabase {
@@ -28,7 +30,10 @@ object ServiceLocator {
 
     fun getRepository(context: Context): WifiRepository {
         return repository ?: synchronized(this) {
-            val repo = WifiRepositoryImpl(getDatabase(context).wifiDao)
+            val helper = wifiManagerHelper ?: WifiManagerHelper(context.applicationContext).also {
+                wifiManagerHelper = it
+            }
+            val repo = WifiRepositoryImpl(getDatabase(context).wifiDao, helper)
             repository = repo
             repo
         }

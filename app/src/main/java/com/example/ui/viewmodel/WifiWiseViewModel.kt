@@ -7,13 +7,12 @@ import com.example.domain.model.ScanHistoryItem
 import com.example.domain.model.WifiNetwork
 import com.example.domain.model.WifiRecommendation
 import com.example.domain.repository.WifiRepository
-import kotlin.random.Random
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -52,6 +51,16 @@ class WifiWiseViewModel(
     private val _liveNetworks = MutableStateFlow<List<WifiNetwork>>(emptyList())
     val liveNetworks: StateFlow<List<WifiNetwork>> = _liveNetworks.asStateFlow()
 
+    // Nearby WiFi access points from WifiManager scan results
+    private val _nearbyNetworks = MutableStateFlow<List<WifiNetwork>>(emptyList())
+    val nearbyNetworks: StateFlow<List<WifiNetwork>> = _nearbyNetworks.asStateFlow()
+
+    private val _lastNearbyScanTimestamp = MutableStateFlow<Long?>(null)
+    val lastNearbyScanTimestamp: StateFlow<Long?> = _lastNearbyScanTimestamp.asStateFlow()
+
+    private val _nearbyScanError = MutableStateFlow<String?>(null)
+    val nearbyScanError: StateFlow<String?> = _nearbyScanError.asStateFlow()
+
     // Currently connected network (derived from live networks)
     val connectedNetwork: StateFlow<WifiNetwork?> = liveNetworks
         .combine(_liveNetworks) { networks, _ ->
@@ -67,12 +76,14 @@ class WifiWiseViewModel(
     val recommendations: StateFlow<List<WifiRecommendation>> = _recommendations.asStateFlow()
 
     private var scanJob: Job? = null
+    private var nearbyScanJob: Job? = null
     private var predictionJob: Job? = null
     private var recommendationJob: Job? = null
 
     init {
         // Automatically begin fetching real-time simulation on start
         startLiveWiFiEngine()
+        startNearbyWiFiEngine()
     }
 
     fun login(email: String, name: String): Boolean {
@@ -104,29 +115,7 @@ class WifiWiseViewModel(
     }
 
     fun triggerManualScan() {
-        viewModelScope.launch {
-            _isScanning.value = true
-            // Simulate processing time
-            delay(2000)
-            
-            // Add a scan history log to Room db
-            val networks = _liveNetworks.value
-            val avgRssi = if (networks.isNotEmpty()) networks.map { it.rssi }.average().toInt() else -65
-            val secureCount = networks.filter { it.securityType != "None" }.size
-            val securityIssues = networks.size - secureCount
-
-            val newHistoryItem = ScanHistoryItem(
-                timestamp = System.currentTimeMillis(),
-                averageSignalStrength = avgRssi,
-                networkCount = networks.size,
-                optimizedCount = Random.nextInt(1, 4),
-                securityIssuesFound = securityIssues,
-                statusMessage = "Manual WiFi Optimization scan completed."
-            )
-            repository.addScanHistory(newHistoryItem)
-            
-            _isScanning.value = false
-        }
+        startNearbyWiFiEngine(logSuccessfulScan = true)
     }
 
     fun clearScanHistory() {
@@ -179,6 +168,45 @@ class WifiWiseViewModel(
                 }
                 startRecommendationEngine(networks)
             }
+        }
+    }
+
+    private fun startNearbyWiFiEngine(logSuccessfulScan: Boolean = false) {
+        nearbyScanJob?.cancel()
+        _isScanning.value = true
+        _nearbyScanError.value = null
+
+        nearbyScanJob = viewModelScope.launch {
+            var shouldLogScan = logSuccessfulScan
+            repository.getNearbyNetworks()
+                .catch { exception ->
+                    _nearbyScanError.value =
+                        exception.message ?: "Unable to retrieve nearby WiFi networks."
+                    _isScanning.value = false
+                }
+                .collect { networks ->
+                    val scanTimestamp = System.currentTimeMillis()
+                    _nearbyNetworks.value = networks
+                    _lastNearbyScanTimestamp.value = scanTimestamp
+                    _nearbyScanError.value = null
+                    _isScanning.value = false
+
+                    if (shouldLogScan && networks.isNotEmpty()) {
+                        val secureCount = networks.count { it.securityType != "None" }
+                        repository.addScanHistory(
+                            ScanHistoryItem(
+                                timestamp = scanTimestamp,
+                                averageSignalStrength =
+                                    networks.map { it.rssi }.average().toInt(),
+                                networkCount = networks.size,
+                                optimizedCount = networks.count { it.isConnected },
+                                securityIssuesFound = networks.size - secureCount,
+                                statusMessage = "Manual nearby WiFi scan completed."
+                            )
+                        )
+                        shouldLogScan = false
+                    }
+                }
         }
     }
 

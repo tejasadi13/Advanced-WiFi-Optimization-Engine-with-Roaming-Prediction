@@ -16,6 +16,7 @@ interface WifiRepository {
     suspend fun clearScanHistory()
 
     fun getLiveWifiNetworks(): Flow<List<WifiNetwork>>
+    fun getNearbyNetworks(): Flow<List<WifiNetwork>>
     fun getRoamingPredictions(currentNetwork: WifiNetwork?): Flow<List<RoamingPrediction>>
     fun getWifiRecommendations(liveNetworks: List<WifiNetwork>): Flow<List<WifiRecommendation>>
 }

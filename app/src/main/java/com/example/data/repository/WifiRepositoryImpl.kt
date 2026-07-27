@@ -3,6 +3,7 @@ package com.example.data.repository
 import com.example.data.local.dao.WifiDao
 import com.example.data.local.entity.SavedNetworkEntity
 import com.example.data.local.entity.ScanHistoryEntity
+import com.example.data.util.WifiManagerHelper
 import com.example.domain.model.RoamingPrediction
 import com.example.domain.model.ScanHistoryItem
 import com.example.domain.model.WifiNetwork
@@ -16,7 +17,8 @@ import java.util.UUID
 import kotlin.random.Random
 
 class WifiRepositoryImpl(
-    private val wifiDao: WifiDao
+    private val wifiDao: WifiDao,
+    private val wifiManagerHelper: WifiManagerHelper
 ) : WifiRepository {
 
     override fun getSavedNetworks(): Flow<List<WifiNetwork>> {
@@ -92,34 +94,17 @@ class WifiRepositoryImpl(
     }
 
     override fun getLiveWifiNetworks(): Flow<List<WifiNetwork>> = flow {
-        // Emit high-quality simulated real-time scanning data
-        val ssids = listOf("WiFiWise_Office", "HQ_Corporate", "Guest_Access_Unsecured", "TechLab_5G", "HomeNet_2G", "CoffeeShop_WiFi", "Conference_Room")
-        val bssids = listOf("00:11:22:33:44:55", "AA:BB:CC:DD:EE:FF", "12:34:56:78:9A:BC", "FE:DC:BA:98:76:54", "88:99:AA:BB:CC:DD", "11:22:33:44:55:66", "55:66:77:88:99:AA")
-        val securities = listOf("WPA3-Personal", "WPA2-Enterprise", "None", "WPA3-Personal", "WPA2-Personal", "None", "WPA2-Enterprise")
-        val frequencies = listOf(5180, 5200, 2412, 5745, 2437, 2462, 5240)
-
         while (true) {
-            val networks = ssids.mapIndexed { index, ssid ->
-                val isConnected = index == 0
-                // Signal fluctuates dynamically to look alive in the UI
-                val baseRssi = if (isConnected) -45 else -55 - (index * 6)
-                val variation = Random.nextInt(-4, 5)
-                val currentRssi = (baseRssi + variation).coerceIn(-100, -30)
-                
-                WifiNetwork(
-                    ssid = ssid,
-                    bssid = bssids[index],
-                    rssi = currentRssi,
-                    frequency = frequencies[index],
-                    channel = getChannelFromFrequency(frequencies[index]),
-                    securityType = securities[index],
-                    isConnected = isConnected,
-                    estimatedSpeedMbps = getEstimatedSpeed(currentRssi)
-                )
-            }.sortedByDescending { it.rssi }
-
-            emit(networks)
+            val connectedNetwork = wifiManagerHelper.getConnectedWifiInfo()
+            emit(connectedNetwork?.let(::listOf) ?: emptyList())
             delay(3000) // update every 3 seconds
+        }
+    }
+
+    override fun getNearbyNetworks(): Flow<List<WifiNetwork>> = flow {
+        while (true) {
+            emit(wifiManagerHelper.scanNearbyNetworks())
+            delay(3000)
         }
     }
 
