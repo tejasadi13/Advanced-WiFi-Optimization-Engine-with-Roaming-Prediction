@@ -1,21 +1,44 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# NetPulse
 
-# Run and deploy your AI Studio app
+NetPulse is an Android Wi-Fi companion for scanning nearby access points, monitoring the active connection, analyzing Wi-Fi conditions, and predicting when roaming may be useful.
 
-This contains everything you need to run your app locally.
+## Current status
 
-View your app in AI Studio: https://ai.studio/apps/56d0c2e9-fc76-4166-99fe-2206432fd299
+The app is actively developed and the following features are implemented:
 
-## Run Locally
+- Live connected-network details: SSID, RSSI, channel, frequency, and link speed.
+- Nearby Wi-Fi scanning using Android `WifiManager.scanResults`.
+- Scanner grouping, connected-network indication, signal quality, loading/error states, and Room-backed favorites.
+- Wi-Fi Analyzer with health score, signal classification, security assessment, congestion analysis, channel recommendations, and band distribution.
+- Roaming Prediction Engine with a rolling 20-sample RSSI history, trend detection, real scan-result candidate selection, and Stay Connected / Prepare Roaming / Roam Now recommendations.
+- Material 3 NetPulse UI with system light/dark theme support.
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+Predictions are computed only from real connected-network and nearby-scan data. When Android redacts the active BSSID or sufficient data is unavailable, NetPulse exposes an empty prediction instead of fabricated values.
 
+## Requirements
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
+- Android Studio
+- An Android device or emulator with Wi-Fi support
+- Wi-Fi and location permissions granted at runtime where required by Android
+
+## Build
+
+Open the project in Android Studio and run it on a device, or build from the project root:
+
+```bash
+./gradlew :app:compileDebugKotlin
+```
+
+On Windows:
+
+```powershell
+.\gradlew.bat :app:compileDebugKotlin
+```
+
+## Architecture
+
+The app follows MVVM and a repository-based clean architecture:
+
+`WifiManagerHelper → WifiRepository → WifiWiseViewModel → Compose UI`
+
+Domain services contain Wi-Fi analysis and roaming-prediction calculations. Room is used for saved networks, favorites, and scan history.
