@@ -8,6 +8,13 @@ import com.example.data.local.WifiDatabase
 import com.example.data.repository.WifiRepositoryImpl
 import com.example.data.util.WifiManagerHelper
 import com.example.domain.repository.WifiRepository
+import com.example.domain.service.AnalyzerService
+import com.example.domain.service.RoamingPredictionService
+import com.example.domain.service.SpeedTestService
+import com.example.domain.service.RecommendationEngine
+import com.example.domain.service.HeatmapService
+import com.example.worker.BackgroundObservationScheduler
+import com.example.domain.service.NetworkJourneyService
 import com.example.ui.viewmodel.WifiWiseViewModel
 
 /**
@@ -33,7 +40,15 @@ object ServiceLocator {
             val helper = wifiManagerHelper ?: WifiManagerHelper(context.applicationContext).also {
                 wifiManagerHelper = it
             }
-            val repo = WifiRepositoryImpl(getDatabase(context).wifiDao, helper)
+            val repo = WifiRepositoryImpl(
+                wifiDao = getDatabase(context).wifiDao,
+                wifiManagerHelper = helper,
+                analyzerService = AnalyzerService(),
+                roamingPredictionService = RoamingPredictionService(),
+                recommendationEngine = RecommendationEngine(),
+                heatmapService = HeatmapService(),
+                backgroundObservationScheduler = BackgroundObservationScheduler(context.applicationContext)
+            )
             repository = repo
             repo
         }
@@ -48,7 +63,7 @@ object ServiceLocator {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 if (modelClass.isAssignableFrom(WifiWiseViewModel::class.java)) {
                     val repo = getRepository(context)
-                    return WifiWiseViewModel(repo) as T
+                    return WifiWiseViewModel(repo, SpeedTestService(), NetworkJourneyService()) as T
                 }
                 throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
             }

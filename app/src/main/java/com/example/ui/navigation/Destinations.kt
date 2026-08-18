@@ -27,4 +27,13 @@ object HistoryDestination
 object AnalyticsDestination
 
 @Serializable
+object SpeedTestDestination
+
+@Serializable
+object NetworkJourneyDestination
+
+@Serializable
+object WifiHeatmapDestination
+
+@Serializable
 object SettingsDestination

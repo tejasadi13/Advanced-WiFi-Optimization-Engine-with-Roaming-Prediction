@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.di.ServiceLocator
-import com.example.domain.model.ScanHistoryItem
 
 class OptimizationWorker(
     appContext: Context,
@@ -13,24 +12,11 @@ class OptimizationWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        Log.d("OptimizationWorker", "WiFiWise Background Optimization worker started")
+        Log.d("OptimizationWorker", "NetPulse background observation worker started")
         
         return try {
-            val repository = ServiceLocator.getRepository(applicationContext)
-            
-            // Perform simulated network analysis and background optimization
-            val scanHistoryItem = ScanHistoryItem(
-                timestamp = System.currentTimeMillis(),
-                averageSignalStrength = -56,
-                networkCount = 6,
-                optimizedCount = 2,
-                securityIssuesFound = 0,
-                statusMessage = "Background Optimization complete (WorkManager)"
-            )
-            
-            repository.addScanHistory(scanHistoryItem)
-            
-            Log.d("OptimizationWorker", "Background WiFi optimization successfully cached")
+            val captured = ServiceLocator.getRepository(applicationContext).captureBackgroundObservation()
+            Log.d("OptimizationWorker", if (captured) "Stored a valid cached/location observation" else "No valid cached/location observation available")
             Result.success()
         } catch (e: Exception) {
             Log.e("OptimizationWorker", "Background optimization failed", e)

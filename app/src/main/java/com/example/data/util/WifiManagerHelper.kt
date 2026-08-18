@@ -10,6 +10,10 @@ import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.util.Log
+import android.location.LocationManager
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import com.example.BuildConfig
 import com.example.domain.model.WifiNetwork
 import java.net.InetAddress
 import java.nio.ByteOrder
@@ -40,8 +44,7 @@ class WifiManagerHelper(private val context: Context) {
                     if (wifiInfo != null) {
                         callbackWifiNetwork = network
                         callbackWifiInfo = wifiInfo
-                        Log.d(
-                            TAG,
+                        debug(
                             "Location-aware WifiInfo updated: ssid=${wifiInfo.ssid}, " +
                                 "bssid=${wifiInfo.bssid}"
                         )
@@ -52,7 +55,7 @@ class WifiManagerHelper(private val context: Context) {
                     if (network == callbackWifiNetwork) {
                         callbackWifiNetwork = null
                         callbackWifiInfo = null
-                        Log.d(TAG, "Location-aware WiFi network lost")
+                        debug("Location-aware WiFi network lost")
                     }
                 }
             }
@@ -92,11 +95,11 @@ class WifiManagerHelper(private val context: Context) {
             return null
         }
 
-        Log.d(TAG, "wifiInfo.ssid=${wifiInfo.ssid}")
-        Log.d(TAG, "wifiInfo.bssid=${wifiInfo.bssid}")
-        Log.d(TAG, "wifiInfo.rssi=${wifiInfo.rssi}")
-        Log.d(TAG, "wifiInfo.frequency=${wifiInfo.frequency}")
-        Log.d(TAG, "wifiInfo.linkSpeed=${wifiInfo.linkSpeed}")
+        debug("wifiInfo.ssid=${wifiInfo.ssid}")
+        debug("wifiInfo.bssid=${wifiInfo.bssid}")
+        debug("wifiInfo.rssi=${wifiInfo.rssi}")
+        debug("wifiInfo.frequency=${wifiInfo.frequency}")
+        debug("wifiInfo.linkSpeed=${wifiInfo.linkSpeed}")
         
         val reportedSsid = wifiInfo.ssid?.replace("\"", "")
         val ssid = if (
@@ -128,7 +131,7 @@ class WifiManagerHelper(private val context: Context) {
             isConnected = true,
             estimatedSpeedMbps = linkSpeed
         )
-        Log.d(TAG, "getConnectedWifiInfo() returning connected network: $network")
+        debug("getConnectedWifiInfo() returning connected network: $network")
         return network
     }
 
@@ -160,6 +163,17 @@ class WifiManagerHelper(private val context: Context) {
         }
     }
 
+    /** Returns only an already available system location; it never starts active location tracking. */
+    fun getLastKnownLocation(): Pair<Double, Double>? {
+        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return null
+        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        if (!locationManager.isLocationEnabled) return null
+        return try {
+            val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
+            providers.asSequence().mapNotNull { provider -> locationManager.getLastKnownLocation(provider) }.maxByOrNull { it.time }?.let { it.latitude to it.longitude }
+        } catch (_: SecurityException) { null }
+    }
+
     /**
      * Returns the latest nearby access points discovered by the Android WiFi subsystem.
      */
@@ -175,13 +189,9 @@ class WifiManagerHelper(private val context: Context) {
                     @Suppress("DEPRECATION")
                     val ssid = scanResult.SSID.ifBlank { HIDDEN_NETWORK_SSID }
                     val bssid = scanResult.BSSID ?: UNKNOWN_BSSID
-                    val isConnected = if (connectedBssid != null) {
-                        bssid.equals(connectedBssid, ignoreCase = true)
-                    } else {
-                        connectedNetwork != null &&
-                            connectedNetwork.ssid != UNKNOWN_NETWORK_SSID &&
-                            ssid == connectedNetwork.ssid
-                    }
+                    // A redacted BSSID cannot identify one AP among several APs sharing an SSID.
+                    // Leave the scan result unmarked rather than falsely marking every match connected.
+                    val isConnected = connectedBssid?.let { bssid.equals(it, ignoreCase = true) } == true
 
                     WifiNetwork(
                         ssid = ssid,
@@ -199,7 +209,7 @@ class WifiManagerHelper(private val context: Context) {
                         .thenByDescending { it.rssi }
                 )
                 .also { networks ->
-                    Log.d(TAG, "scanNearbyNetworks() returned ${networks.size} networks")
+                    debug("scanNearbyNetworks() returned ${networks.size} networks")
                 }
         } catch (exception: SecurityException) {
             Log.e(TAG, "scanNearbyNetworks() failed: WiFi scan permission unavailable", exception)
@@ -210,23 +220,23 @@ class WifiManagerHelper(private val context: Context) {
     private fun getCurrentWifiInfo(): WifiInfo? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             callbackWifiInfo?.let { wifiInfo ->
-                Log.d(TAG, "Using location-aware WifiInfo from NetworkCallback")
+                debug("Using location-aware WifiInfo from NetworkCallback")
                 return wifiInfo
             }
 
-            Log.d(TAG, "Location-aware WifiInfo not available; using synchronous fallback")
+            debug("Location-aware WifiInfo not available; using synchronous fallback")
             val network = connectivityManager.activeNetwork
-            Log.d(TAG, "activeNetwork=$network")
+            debug("activeNetwork=$network")
 
             val capabilities = connectivityManager.getNetworkCapabilities(network)
-            Log.d(TAG, "NetworkCapabilities=$capabilities")
+            debug("NetworkCapabilities=$capabilities")
 
             val hasWifiTransport =
                 capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-            Log.d(TAG, "hasTransport(TRANSPORT_WIFI)=$hasWifiTransport")
+            debug("hasTransport(TRANSPORT_WIFI)=$hasWifiTransport")
 
             val transportInfo = capabilities?.transportInfo
-            Log.d(TAG, "transportInfo=$transportInfo")
+            debug("transportInfo=$transportInfo")
 
             if (hasWifiTransport) {
                 val wifiInfo = transportInfo as? WifiInfo
@@ -247,7 +257,7 @@ class WifiManagerHelper(private val context: Context) {
         } else {
             @Suppress("DEPRECATION")
             wifiManager.connectionInfo.also { wifiInfo ->
-                Log.d(TAG, "Legacy wifiManager.connectionInfo=$wifiInfo")
+                debug("Legacy wifiManager.connectionInfo=$wifiInfo")
             }
         }
     }
@@ -311,5 +321,9 @@ class WifiManagerHelper(private val context: Context) {
         const val HIDDEN_NETWORK_SSID = "Hidden Network"
         const val UNKNOWN_BSSID = "00:00:00:00:00:00"
         const val REDACTED_BSSID = "02:00:00:00:00:00"
+    }
+
+    private fun debug(message: String) {
+        if (BuildConfig.DEBUG) Log.d(TAG, message)
     }
 }

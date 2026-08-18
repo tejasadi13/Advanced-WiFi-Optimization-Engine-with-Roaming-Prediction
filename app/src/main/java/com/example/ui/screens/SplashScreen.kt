@@ -3,30 +3,33 @@ package com.example.ui.screens
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.WifiTethering
+import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.ui.viewmodel.WifiWiseViewModel
 import kotlinx.coroutines.delay
 
@@ -38,62 +41,59 @@ fun SplashScreen(
     val scale = remember { Animatable(0f) }
 
     LaunchedEffect(key1 = true) {
-        scale.animateTo(
-            targetValue = 1.2f,
-            animationSpec = tween(
-                durationMillis = 800,
-                delayMillis = 100
-            )
-        )
-        scale.animateTo(
-            targetValue = 1.0f,
-            animationSpec = tween(durationMillis = 300)
-        )
-        delay(1200) // Keep visible for 1.2s
+        scale.animateTo(1.2f, tween(durationMillis = 800, delayMillis = 100))
+        scale.animateTo(1f, tween(durationMillis = 300))
+        delay(1200)
         onNavigateNext()
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .testTag("splash_screen"),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("splash_screen"),
         contentAlignment = Alignment.Center
     ) {
+        Box(
+            modifier = Modifier.offset(x = (-110).dp, y = (-230).dp).size(260.dp).clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f))
+        )
+        Box(
+            modifier = Modifier.align(Alignment.BottomEnd).offset(x = 84.dp, y = 94.dp).size(230.dp).clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f))
+        )
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(24.dp)
+            modifier = Modifier.padding(32.dp)
         ) {
-            Icon(
-                imageVector = Icons.Filled.WifiTethering,
-                contentDescription = "WiFiWise Logo",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size(110.dp)
-                    .scale(scale.value)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
+            Surface(
+                shape = RoundedCornerShape(32.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp,
+                modifier = Modifier.scale(scale.value)
+            ) {
+                Box(modifier = Modifier.size(112.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.WifiTethering,
+                        contentDescription = "NetPulse logo",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(58.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(28.dp))
+            Text("NetPulse", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground)
+            Spacer(Modifier.height(8.dp))
             Text(
-                text = "WiFiWise",
+                "Your everyday Wi-Fi companion",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(18.dp))
+            Text(
+                "Scan \u2022 Analyze \u2022 Predict \u2022 Optimize",
+                style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                letterSpacing = 1.5.sp
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Advanced WiFi Optimization Engine\nwith Roaming Prediction",
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.5.sp
+                textAlign = TextAlign.Center
             )
         }
     }

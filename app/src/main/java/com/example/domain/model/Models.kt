@@ -23,16 +23,6 @@ data class WifiNetwork(
         }
 }
 
-data class RoamingPrediction(
-    val currentBssid: String,
-    val candidateBssid: String,
-    val candidateSsid: String,
-    val predictionConfidence: Float, // 0.0 to 1.0
-    val recommendedAction: String, // e.g. "Prepare handover", "Maintain connection", "Switch now"
-    val signalTrendCurrent: String, // e.g. "Degrading rapidly", "Stable", "Improving"
-    val estimatedDelayMs: Int
-)
-
 data class WifiRecommendation(
     val id: String = UUID.randomUUID().toString(),
     val title: String,

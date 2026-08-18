@@ -3,22 +3,41 @@ package com.example.data.repository
 import com.example.data.local.dao.WifiDao
 import com.example.data.local.entity.SavedNetworkEntity
 import com.example.data.local.entity.ScanHistoryEntity
+import com.example.data.local.entity.SpeedTestHistoryEntity
+import com.example.data.local.entity.NetworkJourneyEventEntity
+import com.example.data.local.entity.HeatmapObservationEntity
 import com.example.data.util.WifiManagerHelper
 import com.example.domain.model.RoamingPrediction
 import com.example.domain.model.ScanHistoryItem
 import com.example.domain.model.WifiNetwork
 import com.example.domain.model.WifiRecommendation
+import com.example.domain.model.WifiAnalysis
+import com.example.domain.model.SpeedTestResult
+import com.example.domain.model.NetworkRecommendation
 import com.example.domain.repository.WifiRepository
+import com.example.domain.service.AnalyzerService
+import com.example.domain.service.RoamingPredictionService
+import com.example.domain.service.RecommendationEngine
+import com.example.domain.service.HeatmapService
+import com.example.worker.BackgroundObservationScheduler
+import com.example.domain.model.NetworkJourneyEvent
+import com.example.domain.model.HeatmapObservation
+import com.example.domain.model.HeatmapSummary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import java.util.UUID
-import kotlin.random.Random
 
 class WifiRepositoryImpl(
     private val wifiDao: WifiDao,
-    private val wifiManagerHelper: WifiManagerHelper
+    private val wifiManagerHelper: WifiManagerHelper,
+    private val analyzerService: AnalyzerService,
+    private val roamingPredictionService: RoamingPredictionService,
+    private val recommendationEngine: RecommendationEngine,
+    private val heatmapService: HeatmapService,
+    private val backgroundObservationScheduler: BackgroundObservationScheduler
 ) : WifiRepository {
 
     override fun getSavedNetworks(): Flow<List<WifiNetwork>> {
@@ -57,21 +76,16 @@ class WifiRepositoryImpl(
 
     override fun getScanHistory(): Flow<List<ScanHistoryItem>> {
         return wifiDao.getAllScanHistory().map { entities ->
-            if (entities.isEmpty()) {
-                // Return default seed data if database is empty
-                getSeedHistory()
-            } else {
-                entities.map { entity ->
-                    ScanHistoryItem(
-                        id = entity.id.toString(),
-                        timestamp = entity.timestamp,
-                        averageSignalStrength = entity.averageRssi,
-                        networkCount = entity.networkCount,
-                        optimizedCount = entity.optimizedCount,
-                        securityIssuesFound = entity.securityIssuesFound,
-                        statusMessage = entity.statusMessage
-                    )
-                }
+            entities.map { entity ->
+                ScanHistoryItem(
+                    id = entity.id.toString(),
+                    timestamp = entity.timestamp,
+                    averageSignalStrength = entity.averageRssi,
+                    networkCount = entity.networkCount,
+                    optimizedCount = entity.optimizedCount,
+                    securityIssuesFound = entity.securityIssuesFound,
+                    statusMessage = entity.statusMessage
+                )
             }
         }
     }
@@ -108,99 +122,83 @@ class WifiRepositoryImpl(
         }
     }
 
-    override fun getRoamingPredictions(currentNetwork: WifiNetwork?): Flow<List<RoamingPrediction>> = flow {
-        val candidates = listOf(
-            Pair("HQ_Corporate_Node_North", "AA:BB:CC:DD:EE:11"),
-            Pair("HQ_Corporate_Node_West", "AA:BB:CC:DD:EE:22"),
-            Pair("HQ_Corporate_Node_South", "AA:BB:CC:DD:EE:33")
-        )
-
-        while (true) {
-            val signalLossCurrent = currentNetwork?.rssi ?: -75
-            // When current network RSSI drops below -65, roaming recommendations trigger!
-            val predictions = candidates.mapIndexed { index, candidate ->
-                val baseConfidence = if (signalLossCurrent < -70) 0.85f - (index * 0.1f) else 0.4f - (index * 0.1f)
-                val confidence = baseConfidence.coerceIn(0.1f, 0.99f)
-                val action = when {
-                    confidence > 0.8f -> "Prepare handover - High priority"
-                    confidence > 0.6f -> "Pre-auth handshake initiated"
-                    else -> "Monitor coverage"
-                }
-                val trend = when {
-                    signalLossCurrent < -75 -> "Degrading rapidly"
-                    signalLossCurrent < -65 -> "Slight decay"
-                    else -> "Stable"
-                }
-
-                RoamingPrediction(
-                    currentBssid = currentNetwork?.bssid ?: "00:11:22:33:44:55",
-                    candidateBssid = candidate.second,
-                    candidateSsid = candidate.first,
-                    predictionConfidence = confidence,
-                    recommendedAction = action,
-                    signalTrendCurrent = trend,
-                    estimatedDelayMs = 45 + (index * 12)
-                )
-            }
-            emit(predictions)
-            delay(4000)
-        }
+    override fun analyzeNetworks(networks: List<WifiNetwork>): WifiAnalysis? {
+        return analyzerService.analyze(networks)
     }
 
-    override fun getWifiRecommendations(liveNetworks: List<WifiNetwork>): Flow<List<WifiRecommendation>> = flow {
-        val recommendations = mutableListOf<WifiRecommendation>()
+    override fun getRoamingPrediction(
+        currentNetwork: WifiNetwork?,
+        nearbyNetworks: List<WifiNetwork>
+    ): Flow<RoamingPrediction?> = flow {
+        emit(roamingPredictionService.predict(currentNetwork, nearbyNetworks))
+    }
 
-        // Check for security issues (unsecured / none security)
-        val openNetworks = liveNetworks.filter { it.securityType == "None" }
-        if (openNetworks.isNotEmpty()) {
-            recommendations.add(
-                WifiRecommendation(
-                    title = "Disable Unsecured Network Auto-Connect",
-                    description = "Found ${openNetworks.size} unsecured network(s) in range (including '${openNetworks.firstOrNull()?.ssid}'). Disable auto-connect to prevent man-in-the-middle attacks.",
-                    priority = WifiRecommendation.Priority.HIGH,
-                    category = WifiRecommendation.Category.SECURITY
-                )
-            )
-        }
+    override fun getNetworkRecommendations(
+        nearbyNetworks: List<WifiNetwork>,
+        connectedNetwork: WifiNetwork?,
+        analyzerResult: WifiAnalysis?,
+        roamingPrediction: RoamingPrediction?,
+        latestSpeedTest: SpeedTestResult?
+    ): Flow<List<NetworkRecommendation>> = flow {
+        emit(recommendationEngine.generate(nearbyNetworks, connectedNetwork, analyzerResult, roamingPrediction, latestSpeedTest))
+    }
 
-        // Check for 5GHz optimization
-        val connectedNetwork = liveNetworks.firstOrNull { it.isConnected }
-        if (connectedNetwork != null && !connectedNetwork.is5GHz) {
-            val fiveGhzAlternative = liveNetworks.firstOrNull { it.ssid == connectedNetwork.ssid && it.is5GHz }
-            if (fiveGhzAlternative != null) {
-                recommendations.add(
-                    WifiRecommendation(
-                        title = "Switch to 5GHz Band",
-                        description = "You are connected to '${connectedNetwork.ssid}' on the 2.4GHz band, but a faster 5GHz band with the same name is available with strong signal (${fiveGhzAlternative.rssi} dBm).",
-                        priority = WifiRecommendation.Priority.MEDIUM,
-                        category = WifiRecommendation.Category.PERFORMANCE
-                    )
+    override fun getSpeedTestHistory(): Flow<List<SpeedTestResult>> {
+        return wifiDao.getSpeedTestHistory().map { entries ->
+            entries.map { entry ->
+                SpeedTestResult(
+                    networkName = entry.networkName,
+                    downloadMbps = entry.downloadMbps,
+                    uploadMbps = entry.uploadMbps,
+                    pingMs = entry.pingMs,
+                    jitterMs = entry.jitterMs,
+                    durationMs = entry.durationMs,
+                    timestamp = entry.timestamp
                 )
             }
         }
-
-        // Channel congestion
-        recommendations.add(
-            WifiRecommendation(
-                title = "Optimize Router Channel Selection",
-                description = "Channel congestion is high on the 2.4GHz band. Recommend moving your router to Channel 1, 6 or 11 to avoid co-channel overlap.",
-                priority = WifiRecommendation.Priority.LOW,
-                category = WifiRecommendation.Category.PERFORMANCE
-            )
-        )
-
-        // Roaming optimization
-        recommendations.add(
-            WifiRecommendation(
-                title = "Aggressive Roaming Handover Target",
-                description = "Predictive Roaming Engine has cached 'HQ_Corporate_Node_North' with 94% signal confidence. We recommend triggering handover when current signal falls past -72 dBm.",
-                priority = WifiRecommendation.Priority.HIGH,
-                category = WifiRecommendation.Category.COVERAGE
-            )
-        )
-
-        emit(recommendations)
     }
+
+    override suspend fun saveSpeedTestResult(result: SpeedTestResult) {
+        wifiDao.insertSpeedTest(
+            SpeedTestHistoryEntity(
+                networkName = result.networkName,
+                downloadMbps = result.downloadMbps,
+                uploadMbps = result.uploadMbps,
+                pingMs = result.pingMs,
+                jitterMs = result.jitterMs,
+                durationMs = result.durationMs,
+                timestamp = result.timestamp
+            )
+        )
+    }
+
+    override fun getNetworkJourney(): Flow<List<NetworkJourneyEvent>> = wifiDao.getNetworkJourneyEvents().map { entries ->
+        entries.map { NetworkJourneyEvent(it.id, com.example.domain.model.NetworkJourneyEventType.valueOf(it.type), it.timestamp, it.ssid, it.bssid, it.rssi, it.band, it.healthScore, it.predictionState, it.candidateSsid, it.candidateRssi, it.title, it.detail) }
+    }
+
+    override suspend fun recordNetworkJourney(events: List<NetworkJourneyEvent>) {
+        events.forEach { event -> wifiDao.insertNetworkJourneyEvent(NetworkJourneyEventEntity(type = event.type.name, timestamp = event.timestamp, ssid = event.ssid, bssid = event.bssid, rssi = event.rssi, band = event.band, healthScore = event.healthScore, predictionState = event.predictionState, candidateSsid = event.candidateSsid, candidateRssi = event.candidateRssi, title = event.title, detail = event.detail)) }
+    }
+
+    override fun getHeatmapObservations(): Flow<List<HeatmapObservation>> = wifiDao.getHeatmapObservations().map { entries -> entries.map { HeatmapObservation(it.id, it.timestamp, it.latitude, it.longitude, it.ssid, it.bssid, it.rssi, it.frequency) } }
+
+    override fun getHeatmapSummary(ssid: String?, bssid: String?): Flow<HeatmapSummary> = getHeatmapObservations().map { heatmapService.summarize(it, ssid, bssid) }
+
+    override suspend fun captureHeatmapObservation(network: WifiNetwork): Boolean {
+        val coordinates = wifiManagerHelper.getLastKnownLocation() ?: return false
+        val next = heatmapService.createObservation(network, coordinates.first, coordinates.second, System.currentTimeMillis())
+        val previous = wifiDao.getHeatmapObservations().first()
+            .firstOrNull { it.bssid.equals(next.bssid, ignoreCase = true) }
+            ?.let { HeatmapObservation(it.id, it.timestamp, it.latitude, it.longitude, it.ssid, it.bssid, it.rssi, it.frequency) }
+        if (!heatmapService.shouldPersist(previous, next)) return false
+        wifiDao.insertHeatmapObservation(HeatmapObservationEntity(timestamp = next.timestamp, latitude = next.latitude, longitude = next.longitude, ssid = next.ssid, bssid = next.bssid, rssi = next.rssi, frequency = next.frequency))
+        return true
+    }
+
+    override suspend fun captureBackgroundObservation(): Boolean = wifiManagerHelper.getConnectedWifiInfo()?.let { captureHeatmapObservation(it) } ?: false
+
+    override fun setBackgroundObservationEnabled(enabled: Boolean) = backgroundObservationScheduler.setEnabled(enabled)
 
     private fun getChannelFromFrequency(freq: Int): Int {
         return when {
@@ -221,36 +219,4 @@ class WifiRepositoryImpl(
         }
     }
 
-    private fun getSeedHistory(): List<ScanHistoryItem> {
-        val now = System.currentTimeMillis()
-        return listOf(
-            ScanHistoryItem(
-                id = "1",
-                timestamp = now - 3600000, // 1 hr ago
-                averageSignalStrength = -52,
-                networkCount = 8,
-                optimizedCount = 3,
-                securityIssuesFound = 1,
-                statusMessage = "Roaming transition completed in 38ms"
-            ),
-            ScanHistoryItem(
-                id = "2",
-                timestamp = now - 14400000, // 4 hrs ago
-                averageSignalStrength = -64,
-                networkCount = 12,
-                optimizedCount = 5,
-                securityIssuesFound = 2,
-                statusMessage = "Mitigated connection drop in weak zone"
-            ),
-            ScanHistoryItem(
-                id = "3",
-                timestamp = now - 86400000, // 1 day ago
-                averageSignalStrength = -58,
-                networkCount = 10,
-                optimizedCount = 4,
-                securityIssuesFound = 0,
-                statusMessage = "Periodic scan optimization complete"
-            )
-        )
-    }
 }

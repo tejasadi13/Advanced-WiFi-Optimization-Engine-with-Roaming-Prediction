@@ -1,7 +1,9 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,298 +18,134 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.NetworkCheck
+import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.domain.model.WifiRecommendation
+import com.example.domain.model.NetworkDecisionExplanation
+import com.example.domain.model.NetworkRecommendation
+import com.example.domain.model.RecommendationCategory
+import com.example.domain.model.RecommendationPriority
+import com.example.ui.design.NetPulseCard
+import com.example.ui.design.NetPulseEmptyState
+import com.example.ui.design.NetPulsePrimaryButton
 import com.example.ui.viewmodel.WifiWiseViewModel
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
-fun RecommendationsScreen(
-    viewModel: WifiWiseViewModel
-) {
-    val recommendations by viewModel.recommendations.collectAsState()
-    val pendingRecs = recommendations.filter { !it.isApplied }
-    val appliedRecs = recommendations.filter { it.isApplied }
-
+fun RecommendationsScreen(viewModel: WifiWiseViewModel) {
+    val recommendations by viewModel.networkRecommendations.collectAsState()
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp)
-            .testTag("recommendations_screen"),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 20.dp).testTag("recommendations_screen"),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Header
-        item {
-            Text(
-                text = "WiFi Optimization",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "Dynamic tuning recommended by WiFiWise Engine",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
-            )
-        }
-
-        // Active Tasks Section
-        if (pendingRecs.isNotEmpty()) {
+        item { Spacer(Modifier.height(12.dp)) }
+        if (recommendations.isEmpty()) {
             item {
-                Text(
-                    text = "Pending Actions (${pendingRecs.size})",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                )
-            }
-
-            items(pendingRecs) { rec ->
-                RecommendationCard(
-                    recommendation = rec,
-                    onApply = { viewModel.applyRecommendation(rec.id) }
+                NetPulseEmptyState(
+                    title = "No recommendations yet",
+                    message = "Connect to Wi-Fi and complete a nearby scan to receive data-based guidance.",
+                    icon = Icons.Rounded.CheckCircle
                 )
             }
         } else {
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Check,
-                            contentDescription = "Success Icon",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Spectrum Fully Optimized",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "No pending WiFi health recommendations. Your signal paths are running smoothly.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                }
+            items(recommendations, key = { it.id }) { recommendation ->
+                RecommendationCard(recommendation, onAction = { viewModel.acknowledgeNetworkRecommendation(recommendation.id) })
             }
         }
+        item { Spacer(Modifier.height(14.dp)) }
+    }
+}
 
-        // History of Applied Targets
-        if (appliedRecs.isNotEmpty()) {
-            item {
-                Text(
-                    text = "Applied Optimizations (${appliedRecs.size})",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
-                )
+@Composable
+private fun RecommendationCard(recommendation: NetworkRecommendation, onAction: () -> Unit) {
+    val accent = categoryColor(recommendation.category)
+    var expanded by remember(recommendation.id) { mutableStateOf(false) }
+    NetPulseCard(modifier = Modifier.animateContentSize()) {
+        Row(verticalAlignment = Alignment.Top) {
+            Box(Modifier.size(44.dp).clip(CircleShape).background(accent.copy(alpha = .12f)), contentAlignment = Alignment.Center) {
+                Icon(categoryIcon(recommendation.category), null, tint = accent, modifier = Modifier.size(22.dp))
             }
-
-            items(appliedRecs) { rec ->
-                RecommendationCard(
-                    recommendation = rec,
-                    onApply = {}
-                )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(recommendation.category.name.lowercase().replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelMedium, color = accent)
+                Text(recommendation.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
+            PriorityBadge(recommendation.priority)
         }
-    }
-}
-
-@Composable
-fun RecommendationCard(
-    recommendation: WifiRecommendation,
-    onApply: () -> Unit
-) {
-    val cardBgColor by animateColorAsState(
-        targetValue = if (recommendation.isApplied) MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
-        else MaterialTheme.colorScheme.surface,
-        label = "color"
-    )
-
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = cardBgColor
-        ),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(getCategoryBg(recommendation.category)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = getCategoryIcon(recommendation.category),
-                            contentDescription = "Category Icon",
-                            tint = getCategoryColor(recommendation.category),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = recommendation.category.name,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = getCategoryColor(recommendation.category)
-                    )
-                }
-
-                // Priority Badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(getPriorityBg(recommendation.priority))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = recommendation.priority.name,
-                        color = getPriorityColor(recommendation.priority),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = recommendation.title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (recommendation.isApplied) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                else MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = recommendation.description,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (recommendation.isApplied) 0.5f else 1.0f),
-                lineHeight = 16.sp
-            )
-
-            if (!recommendation.isApplied) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = onApply,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth().height(42.dp)
-                ) {
-                    Text(text = "Apply Tune Optimization", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-            } else {
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Check,
-                        contentDescription = "Success Check",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Optimization Active",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
+        Spacer(Modifier.height(12.dp))
+        Text(recommendation.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Detail("Confidence", "${recommendation.confidence}%", Modifier.weight(1f))
+            Detail("Expected benefit", recommendation.expectedBenefit, Modifier.weight(1f))
         }
+        Spacer(Modifier.height(10.dp))
+        Text("Updated ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(recommendation.timestamp))}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        recommendation.explanation?.let { explanation ->
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).clickable { expanded = !expanded }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Why this recommendation?", style = MaterialTheme.typography.labelLarge, color = accent, modifier = Modifier.weight(1f))
+                Icon(Icons.Rounded.ExpandMore, if (expanded) "Hide explanation" else "Show explanation", tint = accent, modifier = Modifier.rotate(if (expanded) 180f else 0f))
+            }
+            AnimatedVisibility(expanded) { EvidencePanel(explanation, accent) }
+        }
+        Spacer(Modifier.height(12.dp))
+        NetPulsePrimaryButton(recommendation.action, onAction, Modifier.fillMaxWidth())
     }
 }
 
 @Composable
-fun getCategoryIcon(category: WifiRecommendation.Category): ImageVector {
-    return when (category) {
-        WifiRecommendation.Category.SECURITY -> Icons.Filled.Security
-        WifiRecommendation.Category.PERFORMANCE -> Icons.Filled.Speed
-        WifiRecommendation.Category.COVERAGE -> Icons.Filled.NetworkCheck
+private fun EvidencePanel(explanation: NetworkDecisionExplanation, accent: Color) {
+    Column(Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp)).background(accent.copy(alpha = .07f)).padding(14.dp)) {
+        Text(explanation.primaryReason, style = MaterialTheme.typography.bodyMedium)
+        if (explanation.supportingFactors.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            explanation.supportingFactors.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        explanation.currentNetwork?.let { Text("Current AP: ${it.ssid ?: "Unavailable"} · ${it.rssi?.let { rssi -> "$rssi dBm" } ?: "RSSI unavailable"}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)) }
+        explanation.candidateNetwork?.let { Text("Candidate AP: ${it.ssid ?: "Unavailable"} · ${it.rssi?.let { rssi -> "$rssi dBm" } ?: "RSSI unavailable"}", style = MaterialTheme.typography.bodySmall) }
+        explanation.prediction?.let { Text("Prediction: ${it.recommendation.name.replace('_', ' ')} · ${it.score}/100", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
+        explanation.analyzer?.let { Text("Analyzer: ${it.healthScore}/100 · RSSI ${it.rssiContribution} · congestion ${it.congestionContribution}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp)) }
+        explanation.speedTest?.let { Text("Speed test: ${formatEvidence(it.downloadMbps)} Mbps down · ${formatEvidence(it.pingMs)} ms ping", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp)) }
     }
 }
 
-@Composable
-fun getCategoryColor(category: WifiRecommendation.Category): Color {
-    return when (category) {
-        WifiRecommendation.Category.SECURITY -> MaterialTheme.colorScheme.error
-        WifiRecommendation.Category.PERFORMANCE -> MaterialTheme.colorScheme.primary
-        WifiRecommendation.Category.COVERAGE -> MaterialTheme.colorScheme.secondary
-    }
+@Composable private fun Detail(label: String, value: String, modifier: Modifier) = Column(modifier) {
+    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(value, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
 
-@Composable
-fun getCategoryBg(category: WifiRecommendation.Category): Color {
-    return getCategoryColor(category).copy(alpha = 0.12f)
+@Composable private fun PriorityBadge(priority: RecommendationPriority) {
+    val color = when (priority) { RecommendationPriority.CRITICAL, RecommendationPriority.HIGH -> MaterialTheme.colorScheme.error; RecommendationPriority.MEDIUM -> Color(0xFFB45309); RecommendationPriority.LOW -> MaterialTheme.colorScheme.primary }
+    Box(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(9.dp)).background(color.copy(alpha = .12f)).padding(horizontal = 8.dp, vertical = 5.dp)) { Text(priority.name, style = MaterialTheme.typography.labelMedium, color = color) }
 }
 
+private fun categoryIcon(category: RecommendationCategory): ImageVector = when (category) { RecommendationCategory.SECURITY -> Icons.Rounded.Security; RecommendationCategory.PERFORMANCE -> Icons.Rounded.Speed; RecommendationCategory.ROAMING, RecommendationCategory.CONGESTION -> Icons.Rounded.NetworkCheck; RecommendationCategory.CONNECTIVITY -> Icons.Rounded.Wifi; RecommendationCategory.OPTIMIZATION -> Icons.Rounded.Tune }
 @Composable
-fun getPriorityColor(priority: WifiRecommendation.Priority): Color {
-    return when (priority) {
-        WifiRecommendation.Priority.HIGH -> MaterialTheme.colorScheme.error
-        WifiRecommendation.Priority.MEDIUM -> MaterialTheme.colorScheme.tertiary
-        WifiRecommendation.Priority.LOW -> MaterialTheme.colorScheme.secondary
-    }
-}
-
-@Composable
-fun getPriorityBg(priority: WifiRecommendation.Priority): Color {
-    return getPriorityColor(priority).copy(alpha = 0.12f)
-}
+private fun categoryColor(category: RecommendationCategory): Color = when (category) { RecommendationCategory.SECURITY -> MaterialTheme.colorScheme.error; RecommendationCategory.PERFORMANCE, RecommendationCategory.OPTIMIZATION -> MaterialTheme.colorScheme.primary; RecommendationCategory.ROAMING -> Color(0xFF7C3AED); RecommendationCategory.CONNECTIVITY -> Color(0xFF15803D); RecommendationCategory.CONGESTION -> Color(0xFFB45309) }
+private fun formatEvidence(value: Double): String = if (value >= 100) "%.0f".format(value) else "%.1f".format(value)
