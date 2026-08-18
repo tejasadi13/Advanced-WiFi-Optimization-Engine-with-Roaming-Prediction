@@ -14,6 +14,7 @@ class NetworkJourneyService {
     private var previousNetwork: WifiNetwork? = null
     private var previousHealth: Int? = null
     private var previousPrediction: HandoffRecommendation? = null
+    private var previousCandidateBssid: String? = null
     private var latestSpeedTimestamp: Long? = null
     private var latestRecommendationIds: Set<String> = emptySet()
 
@@ -28,7 +29,8 @@ class NetworkJourneyService {
             if (delta <= -5) events += event(NetworkJourneyEventType.SIGNAL_DEGRADED, network, analysis, prediction, "Signal degraded", "Observed signal decreased by ${-delta} dBm", timestamp)
         }
         if (network != null && analysis != null && previousHealth != null && kotlin.math.abs(analysis.networkHealthScore - previousHealth!!) >= 10) events += event(NetworkJourneyEventType.HEALTH_CHANGED, network, analysis, prediction, "Network health changed", "Health score is now ${analysis.networkHealthScore}/100", timestamp)
-        if (network != null && prediction != null && prediction.recommendation != previousPrediction) {
+        val candidateChanged = prediction?.recommendedAccessPoint?.bssid != previousCandidateBssid
+        if (network != null && prediction != null && (prediction.recommendation != previousPrediction || candidateChanged)) {
             when (prediction.recommendation) {
                 HandoffRecommendation.PREPARE_ROAMING -> events += event(NetworkJourneyEventType.PREPARE_ROAMING, network, analysis, prediction, "Prepare roaming", "A stronger observed candidate is available", timestamp)
                 HandoffRecommendation.ROAM_NOW -> events += event(NetworkJourneyEventType.ROAM_NOW, network, analysis, prediction, "Roaming recommended", "Observed conditions support an advisory roaming recommendation", timestamp)
@@ -43,6 +45,7 @@ class NetworkJourneyService {
         previousNetwork = network
         previousHealth = analysis?.networkHealthScore
         previousPrediction = prediction?.recommendation
+        previousCandidateBssid = prediction?.recommendedAccessPoint?.bssid
         latestSpeedTimestamp = latestSpeedTest?.timestamp
         latestRecommendationIds = recommendations.map { it.id }.toSet()
         return events
