@@ -42,6 +42,9 @@ class WifiWiseViewModel(
     private val _userEmail = MutableStateFlow("")
     val userEmail: StateFlow<String> = _userEmail.asStateFlow()
 
+    private val _displayName = MutableStateFlow("Raju")
+    val displayName: StateFlow<String> = _displayName.asStateFlow()
+
     // Scanning & state indicators
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
@@ -129,6 +132,7 @@ class WifiWiseViewModel(
     fun login(email: String, name: String): Boolean {
         if (email.contains("@") && email.length > 3) {
             _userEmail.value = email
+            _displayName.value = name.ifBlank { "Raju" }
             _isLoggedIn.value = true
             return true
         }
@@ -138,6 +142,7 @@ class WifiWiseViewModel(
     fun logout() {
         _isLoggedIn.value = false
         _userEmail.value = ""
+        _displayName.value = "Raju"
     }
 
     fun toggleRoamingEngine(enabled: Boolean) {

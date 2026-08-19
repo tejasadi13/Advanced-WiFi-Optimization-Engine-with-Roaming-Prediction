@@ -1,5 +1,12 @@
 # NetPulse
 
+[![Android](https://img.shields.io/badge/Android-API%2024%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
+[![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Min SDK](https://img.shields.io/badge/minSdk-24-orange)](https://developer.android.com/about/versions/nougat)
+[![Target SDK](https://img.shields.io/badge/targetSdk-36-blue)](https://developer.android.com/about/versions/15)
+[![Status](https://img.shields.io/badge/status-active%20development-yellow)](#validation-status)
+
 NetPulse is a local-first Android Wi-Fi diagnostics application. It discovers nearby access points, evaluates the active connection, measures internet performance, predicts when roaming may be useful, and explains recommendations using observed network data.
 
 NetPulse is advisory software. It does not automatically switch Wi-Fi networks, perform seamless handoff, or claim guaranteed performance improvements.

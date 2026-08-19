@@ -38,7 +38,7 @@ import com.example.ui.viewmodel.WifiWiseViewModel
 fun SettingsScreen(viewModel: WifiWiseViewModel, onLogout: () -> Unit) {
     val roamingEnabled by viewModel.roamingEngineEnabled.collectAsState()
     val backgroundEnabled by viewModel.autoOptimizeEnabled.collectAsState()
-    val userEmail by viewModel.userEmail.collectAsState()
+    val displayName by viewModel.displayName.collectAsState()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
@@ -53,7 +53,7 @@ fun SettingsScreen(viewModel: WifiWiseViewModel, onLogout: () -> Unit) {
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("NetPulse account", style = MaterialTheme.typography.titleMedium)
-                        Text(userEmail.ifBlank { "Not signed in" }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(displayName.ifBlank { "Raju" }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     NetPulseSecondaryButton("Log out", onClick = { viewModel.logout(); onLogout() }, modifier = Modifier.height(42.dp).testTag("logout_button"), icon = Icons.Rounded.Logout)
                 }

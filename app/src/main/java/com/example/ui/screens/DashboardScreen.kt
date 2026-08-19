@@ -68,15 +68,15 @@ fun DashboardScreen(
     onNavigateToSettings: () -> Unit
 ) {
     val connectedNetwork by viewModel.connectedNetwork.collectAsState()
+    val displayName by viewModel.displayName.collectAsState()
     val predictions by viewModel.predictions.collectAsState()
     val recommendations by viewModel.recommendations.collectAsState()
-    val userEmail by viewModel.userEmail.collectAsState()
     val roamingEngineEnabled by viewModel.roamingEngineEnabled.collectAsState()
     val wifiAnalysis by viewModel.wifiAnalysis.collectAsState()
 
     val pendingRecsCount = recommendations.count { !it.isApplied }
     val activePrediction = predictions.firstOrNull { it.predictionConfidence > 0.6f }
-    val greetingName = userEmail.substringBefore("@").takeIf { userEmail.isNotBlank() } ?: "there"
+    val greetingName = displayName.takeIf { it.isNotBlank() } ?: "Raju"
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
